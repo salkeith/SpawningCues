@@ -10,10 +10,10 @@
 
 # Selected variables based on hypotheses
 
-setwd("/Users/sallykeith/Documents/Data & Analysis/Spawning cues")
 library(MuMIn)
 library(lme4)
 library(visreg)
+library(effects)
 load("Normalized data used for models IP.RData")
 
 ################################################################################
@@ -72,6 +72,43 @@ dmod <- dredge(sst,subset=msubset)
 sst.sel <- summary(model.avg(get.models(subset(dmod,delta < 3))))
 sst.sel
 
+
+#######################################
+## REMOVE ALL INTERACTIONS
+sst.no.int <- glm(Spawning ~ Wind_avg+I(Wind_avg^2)+Precip_avg+SST_avg+SST_deriv+diff_ss,
+         family = binomial(link="logit"), data = d, na.action = na.fail)      
+# model selection and avergaing
+# expression so that quadratic term cannot be included unless linear term present
+# and interaction terms cannot be included without the main effects
+msubset <- expression(c(Wind_avg|!`I(Wind_avg^2)`))
+# model selection by delta < 3 (Bolker 2009) with polynomials
+dmod <- dredge(sst.no.int,subset=msubset)
+sst.no.int.sel <- summary(model.avg(get.models(subset(dmod,delta < 3))))
+sst.no.int.sel
+
+sst.no.int.best <- glm(Spawning ~ SST_avg+SST_deriv,family = binomial(link="logit"), data = d, na.action = na.fail)      
+
+#######################################
+
+sst.best <- glm(Spawning ~ Precip_avg+SST_avg+SST_deriv+diff_ss+Precip_avg*diff_ss+diff_ss*Precip_avg,
+                family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(sst.best)
+sst.best.no.int <- glm(Spawning ~ SST_avg+SST_deriv,family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(sst.best.no.int)
+
+# model-averaged confidence intervals
+cisstb <- confint(sst.best)
+# use FULL model-averaged coefficients because not all models in the set contain
+# both interaction terms and main effects, or quadratic wind term
+cosstb <- coef(sst.best,full=T)
+CIsstb <- cbind(cosstb,cisstb) 
+CIsstb
+z <- allEffects(sst.best,transformation=list(link=logit,
+                inverse=family(sst.best)$linkinv)
+plot(exp(z),rug=F)
+par(mfcol=c(2,2))
+visreg(sst.best,scale="response",ylim=c(0,1))
+
 # model-averaged confidence intervals
 cisst <- confint(sst.sel)
 # use FULL model-averaged coefficients because not all models in the set contain
@@ -84,11 +121,11 @@ CIsst
 # N.B. not sure how to treat the interactions here...
 CIsst[!(CIsst[,2]<0 & CIsst[,3]>0),]
 
-
-# RESPONSE PLOTS for significant variables 
+##################################################
+# RESPONSE PLOTS for averaged model 
 # manual plotting required, visreg doesn't work on model-averged object
 pdf("SpawningSSTModelPartialCoefs.pdf")
-par(mfcol=c(2,2))
+par(mfrow=c(2,2),oma=c(0,1,0,0))
 
 # SST AVERAGE
 x <- seq(min(d$SST_avg),max(d$SST_avg),length=100)
@@ -129,6 +166,35 @@ for(i in -2:1){
    lines(precipint.pred$fit+precipint.pred$se.fit~x,lty=2,type="l")
    lines(precipint.pred$fit-precipint.pred$se.fit~x,lty=2,type="l")
 }
+
+
+#################################
+# RESPONSE PLOTS - BEST MODEL
+# manual plotting required, visreg doesn't work on model-averged object
+pdf("SpawningCoefsBestModelNoInteractions.pdf")
+par(mfcol=c(2,2)) 
+
+# SST Average
+x <- seq(min(d$SST_avg),max(d$SST_avg),length=100)
+ssta.pred <- with(d,(predict(sst.best.no.int,type="response",se.fit=T,newdata=data.frame(SST_avg=x,
+                     SST_deriv=mean(SST_deriv)))))
+ssta.pred2 <- with(par.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Spawning~SST_avg,data=d,col="lightgray",pch=16,ylab="Spawning probability",
+     xlab="SST mean",cex.lab=1.5)
+points(ssta.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(ssta.pred2[,2]~x,lty=2,type="l")
+lines(ssta.pred2[,3]~x,lty=2,type="l")
+
+# SST DERIVATIVE
+x <- seq(min(d$SST_deriv),max(d$SST_deriv),length=100)
+sstd.pred <- with(d,(predict(sst.best.no.int,type="response",se.fit=T,newdata=data.frame(SST_deriv=x,
+                    SST_avg=mean(SST_avg)))))
+sstd.pred2 <- with(sstd.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Spawning~SST_deriv,data=d,col="lightgray",pch=16,ylab="Spawning probability",
+     xlab="SST derivative",cex.lab=1.5)
+points(sstd.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(sstd.pred2[,2]~x,lty=2,type="l")
+lines(sstd.pred2[,3]~x,lty=2,type="l")
 
 dev.off()
 
@@ -261,12 +327,21 @@ CIsstlight
 # N.B. not sure how to treat the interactions here...
 CIsstlight[!(CIsstlight[,2]<0 & CIsstlight[,3]>0),]
 
-# RESPONSE PLOTS 
+# best model
+sstlight.best <- glm(Spawning ~ Wind_avg+I(Wind_avg^2)+diff_ss+PAR_10.mon+SST_deriv,
+                     family = binomial(link="logit"), data = d, na.action = na.fail)
+cisstlight <- confint(sstlight.best)
+cosstlight <- coef(sstlight.best,full=T)
+CIsstlight.best <- cbind(cosstlight,cisstlight) 
+CIsstlight.best
+
+####################################
+# RESPONSE PLOTS - MODEL AVERAGED
 # manual plotting required, visreg doesn't work on model-averged object
 par(mfcol=c(2,2)) 
 # PAR AVERAGE
 x <- seq(min(d$PAR_10.mon),max(d$PAR_10.mon),length=100)
-parsst.pred <- with(d,(predict(sstlight.sel,type="response",se=T,newdata=data.frame(PAR_10.mon=x,
+parsst.pred <- with(d,(predict(sstlight.sel,type="response",interval="confidence",se=T,newdata=data.frame(PAR_10.mon=x,
             diff_ss=mean(diff_ss),Wind_avg=mean(Wind_avg),SST_deriv=mean(SST_deriv),
             Precip_avg=mean(Precip_avg)))))
 plot(Spawning~PAR_10.mon,data=d,col="lightgray",pch=16,ylab="Spawning probability",
@@ -305,8 +380,57 @@ points(parsst.pred$fit~x,type="l",col=1,lwd=2)
 lines(parsst.pred$fit+parsst.pred$se.fit~x,lty=2,type="l")
 lines(parsst.pred$fit-parsst.pred$se.fit~x,lty=2,type="l")
 
+#################################
+# RESPONSE PLOTS - BEST MODEL
+# manual plotting required, visreg doesn't work on model-averged object
+par(mfcol=c(2,2)) 
+
+# PAR AVERAGE
+x <- seq(min(d$PAR_10.mon),max(d$PAR_10.mon),length=100)
+par.pred <- with(d,(predict(sstlight.best,type="response",se.fit=T,newdata=data.frame(PAR_10.mon=x,
+                        diff_ss=mean(diff_ss),Wind_avg=mean(Wind_avg),SST_deriv=mean(SST_deriv)))))
+par.pred2 <- with(par.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Spawning~PAR_10.mon,data=d,col="lightgray",pch=16,ylab="Spawning probability",
+     xlab="PAR 10 month integral",cex.lab=1.5)
+points(par.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(par.pred2[,2]~x,lty=2,type="l")
+lines(par.pred2[,3]~x,lty=2,type="l")
+
+# SST DERIVATIVE
+x <- seq(min(d$SST_deriv),max(d$SST_deriv),length=100)
+sstd.pred <- with(d,(predict(sstlight.best,type="response",se.fit=T,newdata=data.frame(SST_deriv=x,
+                     diff_ss=mean(diff_ss),Wind_avg=mean(Wind_avg),PAR_10.mon=mean(PAR_10.mon)))))
+sstd.pred2 <- with(sstd.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Spawning~SST_deriv,data=d,col="lightgray",pch=16,ylab="Spawning probability",
+     xlab="SST derivative",cex.lab=1.5)
+points(sstd.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(sstd.pred2[,2]~x,lty=2,type="l")
+lines(sstd.pred2[,3]~x,lty=2,type="l")
+
+# DIFFERENCE SUNSET
+x <- seq(min(d$diff_ss),max(d$diff_ss),length=100)
+ss.pred <- with(d,(predict(sstlight.best,type="response",se.fit=T,newdata=data.frame(diff_ss=x,
+                  PAR_10.mon=mean(PAR_10.mon),Wind_avg=mean(Wind_avg),SST_deriv=mean(SST_deriv)))))
+ss.pred2 <- with(ss.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Spawning~diff_ss,data=d,col="lightgray",pch=16,ylab="Spawning probability",
+     xlab="Difference in sunset",cex.lab=1.5)
+points(ss.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(ss.pred2[,2]~x,lty=2,type="l")
+lines(ss.pred2[,3]~x,lty=2,type="l")
+
+# WIND AVERAGE
+x <- seq(min(d$Wind_avg),max(d$Wind_avg),length=100)
+w.pred <- with(d,(predict(sstlight.best,type="response",se.fit=T,newdata=data.frame(Wind_avg=x,
+                      diff_ss=mean(diff_ss),PAR_10.mon=mean(PAR_10.mon),SST_deriv=mean(SST_deriv)))))
+w.pred2 <- with(w.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Spawning~Wind_avg,data=d,col="lightgray",pch=16,ylab="Spawning probability",
+     xlab="Averaege wind speed",cex.lab=1.5)
+points(w.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(w.pred2[,2]~x,lty=2,type="l")
+lines(w.pred2[,3]~x,lty=2,type="l")
+
 ### Which is the best model out of the three peak spawning mixed models?
-AICc(light,sst,sstlight)
+AICc(light,sst,sstlight,sstlight.best)
 
 
 ################################################################################
@@ -483,7 +607,7 @@ CIpsstlightm[!(CIpsstlightm[,2]<0 & CIpsstlightm[,3]>0),]
 # RESPONSE PLOTS for significant variables 
 # manual plotting required, visreg doesn't work on model-averged object
 pdf("PeakSpawningSSTPARModelPartialCoefs.pdf")
-par(mfcol=c(2,2))
+par(mfrow=c(2,2),oma=c(0,1,0,0))
 
 # DIFF_SS
 x <- seq(min(d$diff_ss),max(d$diff_ss),length=100)
@@ -510,7 +634,7 @@ lines(SST_deriv.pred$fit-SST_deriv.pred$se.fit~x,lty=2,type="l")
 # plot interaction 
 # plot diff_ss as binned variable, Precip_avg as continuous
 # PAR_10.MON * PRECIP_AVG
-par(mfcol=c(2,2))
+par(mfrow=c(2,2),oma=c(0,1,0,0))
 for(i in -2:1){
    PAR10monint <- i+0.5
    x <- seq(min(d$Precip_avg),max(d$Precip_avg),length=100)
@@ -529,5 +653,60 @@ dev.off()
 
 ### Which is the best model out of the three peak spawning mixed models?
 AICc(plightm,psst,psstlightm)
+
+
+####################################
+## REMOVE INTERACTIONS
+psstlightm.no.int <- glmer(Peak ~ Precip_avg+Wind_avg+I(Wind_avg^2)+diff_ss+PAR_10.mon+SST_deriv+
+                              (1|Month),family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(psstlightm.no.int)
+# model selection by delta < 3 (Bolker 2009) with polynomials
+msubset <- expression(c(Wind_avg|!`I(Wind_avg^2)`))   
+dmod <- dredge(psstlightm.no.int,subset=msubset)
+psstlightm.no.int.sel <- summary(model.avg(get.models(subset(dmod,delta < 3))))
+psstlightm.no.int.sel
+
+psstlightm.no.int.best <- glmer(Peak ~ Precip_avg+diff_ss+SST_deriv+
+                              (1|Month),family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(psstlightm.no.int.best)
+
+#################################
+# RESPONSE PLOTS - BEST MODEL
+# manual plotting required, visreg doesn't work on model-averged object
+par(mfcol=c(2,2)) 
+
+# PRECIPITATION AVERAGE
+x <- seq(min(d$Precip_avg),max(d$Precip_avg),length=100)
+precip.pred <- with(d,(predict(psstlightm.no.int.best,type="response",se.fit=T,newdata=data.frame(Precip_avg=x,
+                 diff_ss=mean(diff_ss),SST_deriv=mean(SST_deriv)))))
+precip.pred2 <- with(precip.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Peak~Precip_avg,data=d,col="lightgray",pch=16,ylab="Peak spawning probability",
+     xlab="Mean precipitation",cex.lab=1.5)
+points(precip.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(precip.pred2[,2]~x,lty=2,type="l")
+lines(precip.pred2[,3]~x,lty=2,type="l")
+
+# SST DERIVATIVE
+x <- seq(min(d$SST_deriv),max(d$SST_deriv),length=100)
+sstd.pred <- with(d,(predict(psstlightm.no.int.best,type="response",se.fit=T,newdata=data.frame(SST_deriv=x,
+                  diff_ss=mean(diff_ss)))))
+sstd.pred2 <- with(sstd.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Peak~SST_deriv,data=d,col="lightgray",pch=16,ylab="Peak spawning probability",
+     xlab="SST derivative",cex.lab=1.5)
+points(sstd.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(sstd.pred2[,2]~x,lty=2,type="l")
+lines(sstd.pred2[,3]~x,lty=2,type="l")
+
+# DIFFERENCE SUNSET
+x <- seq(min(d$diff_ss),max(d$diff_ss),length=100)
+ss.pred <- with(d,(predict(psstlightm.no.int.best,type="response",se.fit=T,newdata=data.frame(diff_ss=x,
+                  SST_deriv=mean(SST_deriv)))))
+ss.pred2 <- with(ss.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Peak~diff_ss,data=d,col="lightgray",pch=16,ylab="Peak spawning probability",
+     xlab="Difference in sunset",cex.lab=1.5)
+points(ss.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(ss.pred2[,2]~x,lty=2,type="l")
+lines(ss.pred2[,3]~x,lty=2,type="l")
+
 
 
