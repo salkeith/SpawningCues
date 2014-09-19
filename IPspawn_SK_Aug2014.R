@@ -469,7 +469,7 @@ psstm <- glmer(Peak ~ Wind_avg+I(Wind_avg^2)+Precip_avg+SST_avg+SST_deriv+diff_s
 summary(psstm)
 
 # check whether intercepts vary a lot from the mean for each site/month
-dotplot(ranef(psstm,postVar=TRUE,whichel="Month"))
+dotplot(ranef(psstm,condVar=TRUE,whichel="Month"))
 
 # Variance partition coefficient 
 # VPC = variance for random effect/(variance for random effect + 3.29)
@@ -558,7 +558,7 @@ plightm <- glmer(Peak ~ Precip_avg+Wind_avg+I(Wind_avg^2)+diff_ss+PAR_avg+PAR_10
 summary(plightm)
 
 # check whether intercepts vary a lot from the mean for each site/month
-dotplot(ranef(plightm,postVar=TRUE,whichel="Month"))
+dotplot(ranef(plightm,condVar=TRUE,whichel="Month"))
 
 # Variance partition coefficient 
 # VPC = variance for random effect/(variance for random effect + 3.29)
