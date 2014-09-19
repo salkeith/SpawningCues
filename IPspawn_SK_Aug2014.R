@@ -492,6 +492,37 @@ dmod <- dredge(psstm,subset=msubset)
 psstm.sel <- summary(model.avg(get.models(subset(dmod,delta < 3))))
 psstm.sel
 
+#################################
+# RESPONSE PLOTS - BEST MODEL
+# manual plotting required, visreg doesn't work on model-averged object
+pdf("PeakSSTonlyPartialCoefs.pdf")
+par(mfrow=c(2,2),oma=c(0,2,0,0)) 
+
+# SST AVERAGE
+x <- seq(min(d$SST_avg),max(d$SST_avg),length=100)
+ssta.pred <- with(d,(predict(psstm.sel,type="response",se.fit=T,newdata=data.frame(SST_avg=x,
+                     diff_ss=mean(diff_ss),SST_deriv=mean(SST_deriv),Precip_avg=mean(Precip_avg),
+                     Wind_avg=mean(Wind_avg)))))
+ssta.pred2 <- with(ssta.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Peak~SST_avg,data=d,col="lightgray",pch=16,ylab="P(Peak spawning)",
+     xlab="Mean SST",cex.lab=1.5)
+points(ssta.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(ssta.pred2[,2]~x,lty=2,type="l")
+lines(ssta.pred2[,3]~x,lty=2,type="l")
+
+# SST DERIVATIVE
+x <- seq(min(d$SST_deriv),max(d$SST_deriv),length=100)
+sstd.pred <- with(d,(predict(psstm.sel,type="response",se.fit=T,newdata=data.frame(SST_deriv=x,
+                     diff_ss=mean(diff_ss),SST_avg=mean(SST_avg),Precip_avg=mean(Precip_avg),
+                     Wind_avg=mean(Wind_avg)))))
+sstd.pred2 <- with(sstd.pred,cbind(fit,low=fit-1.96*se.fit,up=fit+1.96*se.fit))
+plot(Peak~SST_deriv,data=d,col="lightgray",pch=16,ylab="P(Peak spawning)",
+     xlab="SST derivative",cex.lab=1.5)
+points(sstd.pred2[,1]~x,type="l",col=1,lwd=2)
+lines(sstd.pred2[,2]~x,lty=2,type="l")
+lines(sstd.pred2[,3]~x,lty=2,type="l")
+
+dev.off()
 
 
 ########
@@ -707,6 +738,21 @@ plot(Peak~diff_ss,data=d,col="lightgray",pch=16,ylab="Peak spawning probability"
 points(ss.pred2[,1]~x,type="l",col=1,lwd=2)
 lines(ss.pred2[,2]~x,lty=2,type="l")
 lines(ss.pred2[,3]~x,lty=2,type="l")
+
+
+
+
+
+#########################################
+
+## PEAK SPAWNING WITH PAR 10 MONTH MEAN ONLY
+
+par10 <- glmer(Peak ~ PAR_10.mon+(1|Month),family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(par10)
+sstd <- glmer(Peak ~ SST_deriv+(1|Month),family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(sstd)
+precip <- glmer(Peak ~ Precip_avg+(1|Month),family = binomial(link="logit"), data = d, na.action = na.fail)
+summary(precip)
 
 
 
