@@ -1,0 +1,13 @@
+Package: CoralSpawn
+Type: Package
+Title: GLMM models to predict time of coral spawning
+Version: 1.0
+Date: 2015-02-14
+Author: S. A. Keith
+Maintainer: S.A. Keith <sally.a.keith@gmail.com>
+Description: Functions to repeat GLMM diagnostic checks and output viewing. Includes checks of GLM before moving on to mixed models
+License: Creative commons
+Depends: lme4,
+    MuMIn,
+    effects,
+    car
